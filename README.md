@@ -48,15 +48,18 @@ There are 2 places in command line to show hash:
 
 There are 2 formats to represent it:
 * hex format
-  which is started with "0x", the followed by hex string. For example, 
+  which is started with "0x", then followed by hex string. For example, 
    * 0x0
    * 0xFFEF
-    Normally they are used as string in Rust or C.
+  
+  Normally they are used as string in Rust or C.
      
 * array format
   plain number, delimited by ",". For example, 
    * 100,200,300
    * 0
-    Normally they are used as literal in Rust or C.
+  
+  Normally they are used as literal in Rust or C.
      
-padding with zero if the length is smaller than 32.
+padding with zero if the length is smaller than 32.  
+Use "--hex" to print hash in hex format: by default, it's in array format.
