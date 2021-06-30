@@ -1,0 +1,3 @@
+[submodule "deps/sparse-merkel-tree"]
+	path = deps/sparse-merkel-tree
+	url = https://github.com/jjyr/sparse-merkle-tree.git
