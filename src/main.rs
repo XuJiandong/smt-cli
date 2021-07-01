@@ -17,7 +17,7 @@ lazy_static! {
 const DELIMITER: &str = "|";
 
 fn hex_format(hash: &[u8]) -> String {
-    let strs: Vec<String> = hash.into_iter().map(|h| format!("{:x}", h)).collect();
+    let strs: Vec<String> = hash.into_iter().map(|h| format!("{:02x}", h)).collect();
     String::from("0x") + &strs.join("")
 }
 
@@ -180,6 +180,13 @@ fn main() {
                 .help("Hashes to exclude, delimited by |"),
         )
         .arg(
+            Arg::with_name("kvpair")
+                .required(false)
+                .short("k")
+                .long("kvpair")
+                .help("By default, assume the value is [1, 0, 0, ...]. When set, value provided."),
+        )        // trailing args
+        .arg(
             Arg::with_name("hex")
                 .required(false)
                 .short("x")
@@ -195,6 +202,8 @@ fn main() {
     let include = matches.value_of("include");
     let exclude = matches.value_of("exclude");
     let is_hex_format = matches.is_present("hex");
+    let is_kvpair = matches.is_present("kvpair");
+
     if include.is_some() && exclude.is_some() {
         println!("include and exclude can't be both used.");
         println!("{}", matches.usage());
@@ -207,13 +216,47 @@ fn main() {
     let hashes_str: Vec<&str> = matches.values_of("hashes").unwrap().collect();
     let hashes: Vec<H256> = hashes_str.into_iter().map(|h| parse_hash(h)).collect();
 
+    if is_kvpair {
+        if hashes.len() % 2 != 0 {
+            println!("The arguments count should be even: <hash as key 1> <value 1> <hash as key 2> <value 2> ...");
+            panic!("stop");
+        }
+    }
+
+    let key_hashes: Vec<H256> = if is_kvpair {
+        hashes
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| i % 2 == 0)
+            .map(|(_, v)| v)
+            .collect()
+    } else {
+        hashes.clone()
+    };
+    let value_hashes: Vec<H256> = if is_kvpair {
+        hashes
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| i % 2 == 1)
+            .map(|(_, v)| v)
+            .collect()
+    } else {
+        let mut res: Vec<H256> = vec![];
+        for _ in 0..hashes.len() {
+            res.push(INCLUSION.clone());
+        }
+        res
+    };
+
     let (root, proof) = if include.is_some() {
         let index = parse_index(include.unwrap());
-        make_inclusion_proof(hashes, index)
+        make_inclusion_proof(key_hashes, value_hashes, index)
     } else {
         assert!(exclude.is_some());
         let non_inclusion_hashes = parse_hashes(exclude.unwrap());
-        make_none_inclusion_proof(hashes, non_inclusion_hashes)
+        make_none_inclusion_proof(key_hashes, value_hashes, non_inclusion_hashes)
     };
     if is_hex_format {
         println!("root: {}", hex_format(root.as_slice()));
@@ -234,26 +277,32 @@ fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
     smt
 }
 
-fn make_inclusion_proof(hashes: Vec<H256>, indexes: Vec<usize>) -> (H256, Vec<u8>) {
-    let inclusion_hashes: Vec<(H256, H256)> = hashes
+fn make_inclusion_proof(
+    key_hashes: Vec<H256>,
+    value_hashes: Vec<H256>,
+    indexes: Vec<usize>,
+) -> (H256, Vec<u8>) {
+    assert_eq!(key_hashes.len(), value_hashes.len());
+
+    let kv_hashes: Vec<(H256, H256)> = key_hashes
         .clone()
         .into_iter()
-        .map(|h| (h, INCLUSION.clone()))
+        .zip(value_hashes.clone())
         .collect();
-    let smt = new_smt(inclusion_hashes.clone());
+    let smt = new_smt(kv_hashes.clone());
     let root = smt.root();
 
     let inclusion_pairs: Vec<(H256, H256)> = indexes
         .into_iter()
-        .map(|i| (hashes[i], INCLUSION.clone()))
+        .map(|i| (key_hashes[i], value_hashes[i]))
         .collect();
-    let inclusion = inclusion_pairs
+    let inclusion_keys = inclusion_pairs
         .clone()
         .into_iter()
         .map(|(k, _)| k)
         .collect();
 
-    let proof = smt.merkle_proof(inclusion).expect("gen proof");
+    let proof = smt.merkle_proof(inclusion_keys).expect("gen proof");
     let compiled_proof = proof
         .clone()
         .compile(inclusion_pairs.clone())
@@ -266,17 +315,23 @@ fn make_inclusion_proof(hashes: Vec<H256>, indexes: Vec<usize>) -> (H256, Vec<u8
     (root.clone(), compiled_proof.0)
 }
 
-fn make_none_inclusion_proof(hashes: Vec<H256>, non_inclusion: Vec<H256>) -> (H256, Vec<u8>) {
-    let inclusion_hashes: Vec<(H256, H256)> = hashes
+fn make_none_inclusion_proof(
+    key_hashes: Vec<H256>,
+    value_hashes: Vec<H256>,
+    non_inclusion_keys: Vec<H256>,
+) -> (H256, Vec<u8>) {
+    let kv_hashes: Vec<(H256, H256)> = key_hashes
         .clone()
         .into_iter()
-        .map(|h| (h, INCLUSION.clone()))
+        .zip(value_hashes.clone())
         .collect();
-    let smt = new_smt(inclusion_hashes.clone());
+    let smt = new_smt(kv_hashes.clone());
     let root = smt.root();
 
-    let proof = smt.merkle_proof(non_inclusion.clone()).expect("gen proof");
-    let non_inclusion_pairs: Vec<(H256, H256)> = non_inclusion
+    let proof = smt
+        .merkle_proof(non_inclusion_keys.clone())
+        .expect("gen proof");
+    let non_inclusion_pairs: Vec<(H256, H256)> = non_inclusion_keys
         .into_iter()
         .map(|i| (i, NON_INCLUSION.clone()))
         .collect();

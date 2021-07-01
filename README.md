@@ -63,3 +63,12 @@ There are 2 formats to represent it:
      
 padding with zero if the length is smaller than 32.  
 Use "--hex" to print hash in hex format: by default, it's in array format.
+
+# Support key-value pair
+By default, assume the value is ```[1, 0, 0, ...]```. It's frequently used in black/white lists.
+
+When "--kvpair" is set, values are also provided. For example:
+```text
+smt-cli --hex --include="0|1|2" --kvpair 0x01 0x01 0x02 0x02 0x03 0x03
+```
+Three pairs (0x01, 0x01), (0x02, 0x02), (0x03, 0x03) are provided.
