@@ -1,10 +1,16 @@
 mod blake2b;
 
-use blake2b::Blake2bHasher;
+use blake2b::{Blake2bHasher, Blake2bHasher_2};
 use clap::{App, AppSettings, Arg};
 use lazy_static::lazy_static;
-use sparse_merkle_tree::default_store::DefaultStore;
-use sparse_merkle_tree::{SparseMerkleTree, H256};
+// restricted sparse merkle tree
+use rsmt::default_store::DefaultStore;
+use rsmt::{SparseMerkleTree, H256};
+use std::convert::From;
+
+// sparse merkel tree, support non-inclusion but low performance
+use smt::default_store::DefaultStore as DefaultStore_2;
+use smt::{SparseMerkleTree as SparseMerkleTree_2, H256 as H256_2};
 
 lazy_static! {
     pub static ref NON_INCLUSION: H256 = [0; 32].into();
@@ -15,6 +21,24 @@ lazy_static! {
     .into();
 }
 const DELIMITER: &str = "|";
+
+fn into_h256_2(h: H256) -> H256_2 {
+    let t: [u8; 32] = h.into();
+    t.into()
+}
+
+fn into_h256(h: H256_2) -> H256 {
+    let t: [u8; 32] = h.into();
+    t.into()
+}
+
+fn into_h256_2_vec(h: Vec<H256>) -> Vec<H256_2> {
+    h.into_iter().map(|h| into_h256_2(h)).collect()
+}
+
+fn into_h256_vec(h: Vec<H256_2>) -> Vec<H256> {
+    h.into_iter().map(|h| into_h256(h)).collect()
+}
 
 fn hex_format(hash: &[u8]) -> String {
     let strs: Vec<String> = hash.into_iter().map(|h| format!("{:02x}", h)).collect();
@@ -256,7 +280,12 @@ fn main() {
     } else {
         assert!(exclude.is_some());
         let non_inclusion_hashes = parse_hashes(exclude.unwrap());
-        make_none_inclusion_proof(key_hashes, value_hashes, non_inclusion_hashes)
+        let (root, proof) = make_none_inclusion_proof(
+            into_h256_2_vec(key_hashes),
+            into_h256_2_vec(value_hashes),
+            into_h256_2_vec(non_inclusion_hashes),
+        );
+        (into_h256(root), proof)
     };
     if is_hex_format {
         println!("root: {}", hex_format(root.as_slice()));
@@ -268,9 +297,18 @@ fn main() {
 }
 
 type SMT = SparseMerkleTree<Blake2bHasher, H256, DefaultStore<H256>>;
+type SMT2 = SparseMerkleTree_2<Blake2bHasher_2, H256_2, DefaultStore_2<H256_2>>;
 
 fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
     let mut smt = SMT::default();
+    for (key, value) in pairs {
+        smt.update(key, value).unwrap();
+    }
+    smt
+}
+
+fn new_smt2(pairs: Vec<(H256_2, H256_2)>) -> SMT2 {
+    let mut smt = SMT2::default();
     for (key, value) in pairs {
         smt.update(key, value).unwrap();
     }
@@ -316,32 +354,29 @@ fn make_inclusion_proof(
 }
 
 fn make_none_inclusion_proof(
-    key_hashes: Vec<H256>,
-    value_hashes: Vec<H256>,
-    non_inclusion_keys: Vec<H256>,
-) -> (H256, Vec<u8>) {
-    let kv_hashes: Vec<(H256, H256)> = key_hashes
+    key_hashes: Vec<H256_2>,
+    value_hashes: Vec<H256_2>,
+    non_inclusion_keys: Vec<H256_2>,
+) -> (H256_2, Vec<u8>) {
+    let kv_hashes: Vec<(H256_2, H256_2)> = key_hashes
         .clone()
         .into_iter()
         .zip(value_hashes.clone())
         .collect();
-    let smt = new_smt(kv_hashes.clone());
+    let smt = new_smt2(kv_hashes.clone());
     let root = smt.root();
 
     let proof = smt
         .merkle_proof(non_inclusion_keys.clone())
         .expect("gen proof");
-    let non_inclusion_pairs: Vec<(H256, H256)> = non_inclusion_keys
+    let non_inclusion_pairs: Vec<(H256_2, H256_2)> = non_inclusion_keys
         .into_iter()
-        .map(|i| (i, NON_INCLUSION.clone()))
+        .map(|i| (i, into_h256_2(NON_INCLUSION.clone())))
         .collect();
-    let compiled_proof = proof
-        .clone()
-        .compile(non_inclusion_pairs.clone())
-        .expect("compile proof");
+    let compiled_proof = proof.clone().compile();
     // verify it locally
     assert!(compiled_proof
-        .verify::<Blake2bHasher>(smt.root(), non_inclusion_pairs)
+        .verify::<Blake2bHasher_2>(smt.root(), non_inclusion_pairs)
         .expect("verify compiled proof"));
 
     (root.clone(), compiled_proof.0)
