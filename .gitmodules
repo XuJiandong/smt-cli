@@ -1,7 +1,7 @@
 [submodule "deps/restricted-sparse-merkel-tree"]
-	path = deps/restricted-sparse-merkel-tree
+	path = deps/restricted-sparse-merkle-tree
     url=https://github.com/jjyr/restricted-sparse-merkle-tree.git
 [submodule "deps/sparse-merkel-tree"]
-	path = deps/sparse-merkel-tree
+	path = deps/sparse-merkle-tree
 	url = https://github.com/TheWaWaR/sparse-merkle-tree.git
 	branch = fix-replay-to-pass-proof-1
