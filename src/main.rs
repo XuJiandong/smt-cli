@@ -67,6 +67,7 @@ fn parse_hash(arg: &str) -> H256 {
         &result[..r.len()].copy_from_slice(r.as_slice());
     } else {
         let r: Vec<u8> = arg
+            .replace(" ", "")
             .split(",")
             .into_iter()
             .map(|i| i.parse::<u8>().unwrap())
