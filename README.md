@@ -1,11 +1,11 @@
 # smt-cli
-Command line tools for SMT: https://github.com/jjyr/sparse-merkle-tree
+Command line tools for SMT: https://github.com/nervosnetwork/sparse-merkle-tree
 
 # inclusion
 ```text
 smt-cli --include "0|1" 11 22
 ```
-Generate a sparse merkel tree, with hash values of:
+Generate a sparse merkle tree, with hash values of:
 ```text
 [11, 0, 0, ...]
 ```
@@ -21,7 +21,7 @@ The arguments in "--include" are indexes, delimited by |.
 ```text
 smt-cli --exclude "11|22" 111 222
 ```
-Generate a sparse merkel tree, with hash values of:
+Generate a sparse merkle tree, with hash values of:
 ```text
 [111, 0, 0, ...]
 ```
